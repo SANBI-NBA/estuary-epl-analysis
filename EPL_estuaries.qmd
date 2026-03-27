@@ -17,7 +17,7 @@ library(stringr)
 # Get data from NBA data sharepoint
 data_file_path <- Sys.getenv("NBA_DATA")
 
-# Set folder path to the intergrated ecosystem map (IEM) 
+# Set folder path to the integrated ecosystem map (IEM) 
 # find and list item - cant use list.files on gdbs this code first looks at all folder ending in gdb then finds the one you want 
 iem_dirs <- list.dirs(
   path = Sys.getenv("NBA_DATA"),
