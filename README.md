@@ -10,7 +10,7 @@ July 2025
 
 This repository contains a workflow that results in the NBA 2025 Ecosystem Protection Level indicators for Estuarine Ecosystems of South Africa following the methods of van Niekerk et al., 2019.
 
-The Quarto document [EPL_estuaries.qmd](https://github.com/askowno/EPL_riv/blob/main/EPL_estuariest.qmd) describes the import of Protected Areas time series data - prepared in ARCPRO by SANBI - based on the South African Protected Areas Database (SAPAD) 2024Q4 (Department of Forestry Fisheries and Environment) and the import of the South African estuary spatial data (van Niekerk XXX) and Estuarine Health assessment tables. The data were combined (intersection) using the sf package in R and summarised using the tidyverse.
+The Quarto document [EPL_estuaries.qmd](https://github.com/askowno/EPL_riv/blob/main/EPL_estuariest.qmd) describes the import of Protected Areas time series data - prepared in ARCPRO by SANBI - based on the South African Protected Areas Database (SAPAD) 2024Q4 (Department of Forestry Fisheries and Environment) and the import of the South African estuary spatial data (van Niekerk pers com) and Estuarine Health assessment tables. The data were combined (intersection) using the sf package in R and summarised using the tidyverse.
 
 Estuarine Condition (Health) scores (0-100) are assigned to PES categories (A-F) and NBA Modification categories (Natural - Severely modified) according to the table below.
 
@@ -45,7 +45,7 @@ Summary table - extent of estuarine per biogeographic zone per EPL category [epl
 Estuarine Ecosystem Protection Level 2025 - plots
 
 | Count of Ecosystem Types per EPL category | Extent of Ecosystem Types per EPL category |
-|----|----|
+|------------------------------------|------------------------------------|
 | ![](outputs/epl24_est_bar_plot_count.jpeg) | ![](outputs/epl24_est_bar_plot_ext.jpeg) |
 
 EPL Index - showing decline in protection level for Subtropical Estuaries in particular - due to fishing pressures

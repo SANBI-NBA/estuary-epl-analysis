@@ -11,20 +11,46 @@ library(sf)
 library(tidyverse)
 library(readxl)
 library(stringr)
+```
 
+```{r}
+# Get data from NBA data sharepoint
+data_file_path <- Sys.getenv("NBA_DATA")
+
+# Set folder path to the intergrated ecosystem map (IEM) 
+# find and list item - cant use list.files on gdbs this code first looks at all folder ending in gdb then finds the one you want 
+iem_dirs <- list.dirs(
+  path = Sys.getenv("NBA_DATA"),
+  recursive = TRUE,
+  full.names = TRUE)
+
+iem_fp <- grep("IEM5_12_07012025\\.gdb$", iem_dirs, value = TRUE)
 
 # Add spatial data - use IEM Jan 2025 then extract Estuaries
-est_v <-st_read("C:/Users/skownoa/Dropbox/NBAwork/IEMworking/IEM5_12_07012025.gdb", layer = "IEM5_12_07012025") 
+est_v <-st_read(iem_fp, layer = "IEM5_12_07012025") 
 est_v <- est_v %>%
   mutate(outletID = as.numeric(E_EstID)) %>% # IEM miss names outletID as EstID (these are different codes)
   filter(outletID > 0, E_Est_BrdG != "Micro-System") # select only estuaries and exclude micros 
 
-# Add tabular data (in excel change sheet name to Data, and remove last two rows on NAs, change cols with numbers at start of name )
-est_t <- read_excel("C:/Users/skownoa/Dropbox/NBAwork/Estuaries/estuary_assesment2025_v8.xlsx", sheet = "Data")
+# Add tabular data (in excel change sheet name to "Data", and remove last two rows of NAs, change cols with numbers at start of name)
 
+estdata_fp <- list.files(path = data_file_path, 
+                           pattern = "^estuary_assesment2025_v8\\.xlsx$",
+                           recursive = TRUE,
+                           full.names = TRUE)
+est_t <- read_excel(estdata_fp, sheet = "Data")
 
-pa <- st_read("C:/Users/skownoa/Dropbox/NBAwork/NLC_change/NLC_Change.gdb", layer = "SANBI_PA_2024Q4_Mar2025") 
+# add Protected Areas data 
+# set folder path - cant use list.files on gdbs -  this code first looks at all folders ending in gdb then finds the one you want 
+pa_dirs <- list.dirs(
+  path = Sys.getenv("NBA_DATA"),
+  recursive = TRUE,
+  full.names = TRUE)
 
+pa_fp <- grep("NLC_change\\.gdb$", pa_dirs, value = TRUE)
+
+# Add spatial data - use PA MArch 2025 then extract Estuaries
+pa <-st_read(pa_fp, layer = "SANBI_PA_2024Q4_Mar2025") 
 
 ```
 
@@ -473,15 +499,4 @@ ggsave(
   width = 14, height = 9, units = "cm")
 
 # for pdf use device = "pdf" and drop resolution 
-```
-
-```{r}
-# Prepare output spatial data 
-# est_epl_res_v <- est_v2 %>%
-#   left_join(est_t2, by = "outletID") %>%
-#   select(outletID, full_ecosystem_type_name, est_name) %>%
-#   left_join(est_type_metrics, by = "full_ecosystem_type_name") %>%
-#   relocate(biogeographical_zone, .after = full_ecosystem_type_name)
-#  
-# st_write(est_epl_res_v, "C:/Users/skownoa/Dropbox/NBAwork/Estuaries/est_epl_results.gpkg") 
 ```
