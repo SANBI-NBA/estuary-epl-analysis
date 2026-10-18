@@ -14,43 +14,47 @@ library(stringr)
 ```
 
 ```{r}
-# Get data from NBA data sharepoint
-data_file_path <- Sys.getenv("NBA_DATA")
 
-# Set folder path to the integrated ecosystem map (IEM) 
-# find and list item - cant use list.files on gdbs this code first looks at all folder ending in gdb then finds the one you want 
-iem_dirs <- list.dirs(
-  path = Sys.getenv("NBA_DATA"),
-  recursive = TRUE,
-  full.names = TRUE)
+##file names
+#ecosystem map
+est_eco_map_fl <- "EstuarineEcosystemMap2018.shp"
+#condition table
+est_cnd_fl <- "Updated Estuary Realm Condition 2025.xlsx"
+# protected areas
+pa_fl <- "SAPAD_OR_2026_Q2.shp"
 
-iem_fp <- grep("IEM5_12_07012025\\.gdb$", iem_dirs, value = TRUE)
 
-# Add spatial data - use IEM Jan 2025 then extract Estuaries
-est_v <-st_read(iem_fp, layer = "IEM5_12_07012025") 
-est_v <- est_v %>%
-  mutate(outletID = as.numeric(E_EstID)) %>% # IEM miss names outletID as EstID (these are different codes)
-  filter(outletID > 0, E_Est_BrdG != "Micro-System") # select only estuaries and exclude micros 
+# Add spatial data 
+est_v <- st_read(list.files(path=Sys.getenv("NBA_DATA"),
+                                   pattern=est_eco_map_fl,
+                                   recursive = T,
+                                   full.names = T)[1]) |> 
+  filter(BroadGroup != "Micro-System")# select only estuaries and exclude micros
 
-# Add tabular data (in excel change sheet name to "Data", and remove last two rows of NAs, change cols with numbers at start of name)
-
-estdata_fp <- list.files(path = data_file_path, 
-                           pattern = "^estuary_assesment2025_v8\\.xlsx$",
-                           recursive = TRUE,
-                           full.names = TRUE)
-est_t <- read_excel(estdata_fp, sheet = "Data")
+openw <- st_read(list.files(path=Sys.getenv("NBA_DATA"),
+                                   pattern=ow_fl,
+                                   recursive = T,
+                                   full.names = T)[1]) 
 
 # add Protected Areas data 
-# set folder path - cant use list.files on gdbs -  this code first looks at all folders ending in gdb then finds the one you want 
-pa_dirs <- list.dirs(
-  path = Sys.getenv("NBA_DATA"),
-  recursive = TRUE,
-  full.names = TRUE)
 
-pa_fp <- grep("NLC_change\\.gdb$", pa_dirs, value = TRUE)
+pa <-st_read(list.files(path=Sys.getenv("NBA_DATA"),
+                                   pattern=pa_fl,
+                                   recursive = T,
+                                   full.names = T)[1]) 
 
-# Add spatial data - use PA MArch 2025 then extract Estuaries
-pa <-st_read(pa_fp, layer = "SANBI_PA_2024Q4_Mar2025") 
+
+# Add tabular data 
+
+est_t <- readxl::read_xlsx(list.files(path= Sys.getenv("NBA_DATA"),
+                                   pattern=est_cnd_fl,
+                                   recursive = T,
+                                   full.names = T),
+                                   sheet = 1, guess_max = 10000) |> 
+  filter(!is.na(NAME))
+
+
+
 
 ```
 
@@ -60,33 +64,44 @@ pa <-st_read(pa_fp, layer = "SANBI_PA_2024Q4_Mar2025")
 # Protected Areas - Subset PA data for 2018 and 2024 using DECL_YEAR, excluding properties degazetted using UNDECL_YEA. In preparation for this selection DECL_YEAR is set to 0 when unknown, and UNDCL_YEA is set to 9999 for those PAs that have never been degazetted.
 options(scipen = 999)
 
-pa2018 <- subset(pa, DECL_YEAR <  2019 & UNDECL_YEA >2018)
-pa2024 <- subset(pa, DECL_YEAR <  2025 & UNDECL_YEA >2024)
+pa1 <- pa |> 
+  separate_wider_delim(D_DCLAR, delim = "-", names = c("DECL_YEAR", NA, NA)) |> 
+  st_as_sf() |> 
+  st_transform(crs = st_crs(est_v))
+
+pa2018 <- subset(pa1, DECL_YEAR <  2019 ) #& UNDECL_YEA >2018
+pa2024 <- subset(pa1, DECL_YEAR <  2025 ) #& UNDECL_YEA >2024
 
 # Estuaries have separate features for EFZ SHORE and EFZ, merge these together for calculating PA extent and EOO etc. Also IEM estuaries are divided up due to integration in IEM, so need to merge features based on outletID 
 est_v2 <- est_v %>%
-  group_by(outletID) %>%
-  summarise(Shape = st_union(Shape), .groups = "drop")  
+  summarise(geometry = st_union(geometry), .by = c(Estuary_Na, EcosystemT, Bioregion))  |> 
+  rename(estuary = Estuary_Na,
+         eco_type = EcosystemT,
+         bioregion = Bioregion)
 
 # select colums from  health spreadsheet import
 est_t2 <- est_t %>%
-  select(outletID,  estID, east_DD, south_DD, est_name, full_ecosystem_type_name, est_ecosystem_type_code, biogeographical_zone, efz_ha, `2025_est_condition`, `2018_est_condition`, `2011_est_condition`, Pressure_2025_fishing_effort_DEFF, Pressure_2018_fishing_effort_DEFF, Pressure_2011_fishing_effort_DEFF, `hundred_km-zone`, `Condition_100km-zone`, fish, fish2018) %>% 
+  select(`Est ID (West to East)`,
+         NAME,
+         `Cumulative Pressure Level`,
+         `Ecological Category (Mean)`,
+         ...34,
+         `NBA Condition Category`
+         ) |> 
+
 # clean up names for r
-  rename(hund_km_zone =`hundred_km-zone`, hund_km_zone_cond = `Condition_100km-zone`, 
-       condition24 =`2025_est_condition`, condition18 =`2018_est_condition`, 
-       condition11 = `2011_est_condition`, fishing_effort24 = Pressure_2025_fishing_effort_DEFF,
-       fishing_effort18 = Pressure_2018_fishing_effort_DEFF, 
-       fishing_effort11 = Pressure_2011_fishing_effort_DEFF) %>% 
-  #fix Vh case 
-  mutate(fishing_effort24 = ifelse(fishing_effort24 == "Vh", "VH", fishing_effort24)) %>%
-  # drop black rows at end of table
-  filter(!is.na(outletID ))
+  rename(id_west_east =`Est ID (West to East)`,
+         estuary = NAME, 
+       cum_pres =`Cumulative Pressure Level`,
+       PES25 =`Ecological Category (Mean)`, 
+       rec_actions = ...34, 
+       mod25 =  `NBA Condition Category`) 
 
 # combined estuary data into a table
-est <- est_v2 %>%
-  left_join(est_t2, by = "outletID") %>%
-  # recalculate EFZ area m2 to check the data from Lara is correct
-   mutate(efz_area = as.numeric(st_area(.))) 
+est_v3 <- est_v2 %>%
+  left_join(est_t2, by = "estuary") 
+
+
 
 ```
 
@@ -94,25 +109,34 @@ est <- est_v2 %>%
 
 ```{r}
 # Intersect PA with Estuaris at each time point
-pa18_est <- st_intersection(est, pa2018)
-pa18_est <- pa18_est %>%
+pa18_est <- st_intersection(est_v3, pa2018)
+pa18_est1 <- pa18_est %>%
   mutate(area18pa = as.numeric(st_area(.))) %>%
-   group_by(outletID) %>%
+  st_drop_geometry() %>%
   summarise(sum_area18pa = sum((as.numeric(area18pa))), 
-            .groups = "drop") %>%
-  st_drop_geometry()
+            .by = "estuary")
   
-pa24_est <- st_intersection(est, pa2024)
-pa24_est <- pa24_est %>%
+pa24_est <- st_intersection(est_v3, pa2024)
+pa24_est1 <- pa24_est %>%
   mutate(area24pa = as.numeric(st_area(.))) %>%
-   group_by(outletID) %>%
+  st_drop_geometry()%>%
   summarise(sum_area24pa = sum((as.numeric(area24pa))), 
-            .groups = "drop") %>%
-  st_drop_geometry()
+            .by = "estuary") 
 
 # Join the PA extent calculations to the estuary   data (using outletID) and then group by est  type and summarise by Condition class
 options(scipen = 999)
 
+est_v4 <- est_v3 %>%
+  st_drop_geometry() %>%
+  left_join(pa24_est1, by = "estuary") %>%
+  left_join(pa18_est1, by = "estuary") %>%
+  mutate(across(c(sum_area24pa, sum_area18pa), ~ replace_na(.x, 0)))
+
+
+write.csv(est_v4, file = "outputs/est_pa_metrics290.csv")
+```
+
+```{r}
 est <- est %>%
   st_drop_geometry() %>%
   left_join(pa24_est, by = "outletID") %>%
@@ -163,8 +187,8 @@ est <- est %>%
     TRUE ~ "E"
   )) 
 
-write.csv(est, file = "outputs/est_pa_metrics290.csv")
 ```
+
 
 #### Summarise data per type
 
@@ -175,7 +199,7 @@ options(scipen = 999)
 
 # overall type x cond summary
 
-est_type_18 <- est %>%
+est_type_18 <- est_v4 %>%
     group_by(full_ecosystem_type_name, pes18) %>%
   summarise(extent = sum(as.numeric(efz_area), na.rm = TRUE)) %>%
   ungroup() %>%
